@@ -16,6 +16,8 @@ import ciphey
 import cipheycore
 
 from ciphey.iface import ParamSpec, CrackResult, T, CrackInfo, registry
+from ciphey.common import fix_case
+
 
 @registry.register
 class Caesar(ciphey.iface.Cracker[str]):
@@ -38,7 +40,7 @@ class Caesar(ciphey.iface.Cracker[str]):
         return "caesar"
 
     def attemptCrack(self, ctext: str) -> List[CrackResult]:
-        logger.debug("Trying caesar cipher")
+        logger.debug(f"Trying caesar cipher on {ctext}")
         # Convert it to lower case
         #
         # TODO: handle different alphabets
@@ -75,11 +77,9 @@ class Caesar(ciphey.iface.Cracker[str]):
         for candidate in possible_keys:
             logger.trace(f"Candidate {candidate.key} has prob {candidate.p_value}")
             translated = cipheycore.caesar_decrypt(message, candidate.key, self.group)
-            candidates.append(CrackResult(value=translated, key_info=candidate.key))
+            candidates.append(CrackResult(value=fix_case(translated, ctext), key_info=candidate.key))
 
         return candidates
-
-
 
     @staticmethod
     def getParams() -> Optional[Dict[str, ParamSpec]]:
@@ -107,10 +107,6 @@ class Caesar(ciphey.iface.Cracker[str]):
             # TODO: add "filter" param
         }
 
-    @staticmethod
-    def scoreUtility() -> float:
-        return 1.5
-
     def __init__(self, config: ciphey.iface.Config):
         super().__init__(config)
         self.lower: Union[str, bool] = self._params()["lower"]
@@ -119,4 +115,4 @@ class Caesar(ciphey.iface.Cracker[str]):
         self.group = list(self._params()["group"])
         self.expected = config.get_resource(self._params()["expected"])
         self.cache = config.cache
-        self.p_value = self._params()["p_value"]
+        self.p_value = float(self._params()["p_value"])

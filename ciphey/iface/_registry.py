@@ -36,9 +36,13 @@ class Registry:
     _reg: Dict[Type, RegElem] = {}
     _names: Dict[str, Tuple[Type, Set[Type]]] = {}
     _targets: Dict[str, Dict[Type, List[Type]]] = {}
-    _modules = {Checker, Cracker, Decoder, ResourceLoader, Searcher}
+    _modules = {Checker, Cracker, Decoder, ResourceLoader, Searcher, PolymorphicChecker}
 
     def _register_one(self, input_type, module_base, module_args):
+        if len(module_args) == 0:
+            self._reg.setdefault(module_base, []).append(input_type)
+            return
+
         target_reg = self._reg.setdefault(module_base, {})
         # Seek to the given type
         for subtype in module_args[0:-1]:
@@ -62,10 +66,12 @@ class Registry:
             module_base = None
 
             # Work out what module type this is
-            if len(args) == 0:
+            if len(args) == 0 and hasattr(input_type, "__orig_bases__"):
                 for i in input_type.__orig_bases__:
                     if module_type is not None:
-                        raise TypeError(f"Type derived from multiple registrable base classes {i} and {module_type}")
+                        raise TypeError(
+                            f"Type derived from multiple registrable base classes {i} and {module_type}"
+                        )
                     module_base = get_origin(i)
                     if module_base not in self._modules:
                         continue
@@ -75,14 +81,31 @@ class Registry:
                     if not issubclass(input_type, i):
                         continue
                     if module_type is not None:
-                        raise TypeError(f"Type derived from multiple registrable base classes {i} and {module_type}")
+                        raise TypeError(
+                            f"Type derived from multiple registrable base classes {i} and {module_type}"
+                        )
                     module_type = i
             if module_type is None:
                 raise TypeError("No registrable base class")
 
+            # Replace input type with polymorphic checker if required
+            if issubclass(input_type, Checker):
+                if len(args) == 0:
+                    arg = [get_args(i) for i in input_type.__orig_bases__ if get_origin(i) == Checker][0]
+                    if len(arg) != 1:
+                        raise TypeError(f"No argument for Checker")
+                    input_type = input_type.convert({arg[0]})
+                else:
+                    input_type = input_type.convert(set(args))
+                self._register_one(input_type, PolymorphicChecker, [])
+                # Refresh the names with the new type
+                name_target = self._names[name] = (input_type, {PolymorphicChecker})
+
             # Now handle the difference between register and register_multi
             if len(args) == 0:
-                if module_base is None:
+                if module_type is PolymorphicChecker:
+                    module_base = PolymorphicChecker
+                elif module_base is None:
                     raise TypeError("No type argument given")
                 self._register_one(input_type, module_base, get_args(module_type))
                 name_target[1].add(module_base)
@@ -101,7 +124,9 @@ class Registry:
         name_target[1].add(module_type)
 
         if target is not None and issubclass(module_base, Targeted):
-            self._targets.setdefault(target, {}).setdefault(module_type, []).append(input_type)
+            self._targets.setdefault(target, {}).setdefault(module_type, []).append(
+                input_type
+            )
 
         return input_type
 

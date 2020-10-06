@@ -12,6 +12,8 @@ import base58
 import base62
 import re
 
+import lukas
+
 
 class encipher:
 
@@ -21,7 +23,6 @@ class encipher:
         """Inits the encipher object """
         self.text = self.read_text()
         self.MAX_SENTENCE_LENGTH = 5
-        # ntlk.download("punkt")
         self.crypto = encipher_crypto()
 
     def read_text(self):  # pragma: no cover
@@ -68,7 +69,7 @@ class encipher_crypto:  # pragma: no cover
             self.base58_ripple,
             self.b62,
         ]
-        self.morse_dict = dict(cipheydists.get_charset("morse"))
+        self.morse_dict = dict(cipheydists.get_translate("morse"))
         self.letters = string.ascii_lowercase
         self.group = cipheydists.get_charset("english")["lcase"]
 
@@ -190,5 +191,3 @@ class encipher_crypto:  # pragma: no cover
         return base62.decode(str(re.sub(r"[^A-Za-z1-9]+", "", text)))
 
 
-# obj = encipher()
-# print(obj.getRandomEncryptedSentence())
